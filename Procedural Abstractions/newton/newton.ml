@@ -1,6 +1,6 @@
 #use "complex_arith.ml"
 
-(*TODO: implement newton's method*)
+(*implement newton's method*)
 let newton f x0 =
     let ( + ) = complex_arith "add" in
     let ( - ) = complex_arith "sub" in
