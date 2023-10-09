@@ -51,14 +51,12 @@ module ARMA (Param:ARMAParam) : ISystem = struct
     let b3 = Param.b3
 
     let output in_strm =
-      let rec iter (y1, y2, y3) (u1, u2, u3) u =
-          let u0 = car u in
-          let y0 = (a1 *. y1) +. (a2 *. y2) +. (a3 *. y3) +. (b0 *. u0) +. (b1 *. u1) +. (b2 *. u2) +. (b3 *. u3) in
-          Cons (y0, fun () -> iter (y0, y1, y2) (u0, u1, u2) (cdr u))
-      in
-      let rec make_u_stream u = Cons (u, fun () -> make_u_stream 0.) in
-      let u0 = car in_strm in
-      iter (0., 0., 0.) (0., 0., 0.) (make_u_stream u0)
+        let rec iter (y1, y2, y3) (u1, u2, u3) u =
+            let u0 = car u in
+            let y0 = (a1 *. y1) +. (a2 *. y2) +. (a3 *. y3) +. (b0 *. u0) +. (b1 *. u1) +. (b2 *. u2) +. (b3 *. u3) in
+            Cons (y0, fun () -> iter (y0, y1, y2) (u0, u1, u2) (cdr u))
+        in
+        iter (0., 0., 0.) (0., 0., 0.) in_strm
 end
 
 
@@ -75,7 +73,7 @@ end
 module PID (Param:PIDParam) : IController = struct
     open Stream
 
-    module Integrator = ARMA (struct
+    module IntegratorParam : ARMAParam = struct
         let a1 = 1.0
         let a2 = 0.0
         let a3 = 0.0
@@ -83,30 +81,37 @@ module PID (Param:PIDParam) : IController = struct
         let b1 = 0.0
         let b2 = 0.0
         let b3 = 0.0
-    end)
+    end
 
-    module Differentiator = ARMA (struct
-        let a1 = 1.0
-        let a2 = -1.0
+    module Integrator = ARMA(IntegratorParam)
+
+    module DifferentiatorParam : ARMAParam = struct
+        let a1 = 0.0
+        let a2 = 0.0
         let a3 = 0.0
         let b0 = 1.0
-        let b1 = 0.0
+        let b1 = -1.0
         let b2 = 0.0
         let b3 = 0.0
-    end)
+    end
+
+    module Differentiator = ARMA(DifferentiatorParam)
 
     let p_gain = Param.p
     let i_gain = Param.i
     let d_gain = Param.d
 
     let control err_strm =
+        let i_strm = Integrator.output err_strm in
+        let d_strm = Differentiator.output err_strm in
         let rec iter e_strm i_strm d_strm =
-            let p_term = cons (p_gain *. (car e_strm)) (fun () -> iter (cdr e_strm) (cdr i_strm) (cdr d_strm)) in
-            let i_term = Integrator.output e_strm in
-            let d_term = cons (d_gain *. (car d_strm)) (fun () -> iter (cdr e_strm) (cdr i_strm) (cdr d_strm)) in
-            cons (car p_term +. car i_term +. car d_term) (fun () -> iter (cdr e_strm) (cdr i_strm) (cdr d_strm))
+            match e_strm, i_strm, d_strm with
+            | Cons(e, e_thunk), Cons(i, i_thunk), Cons(d, d_thunk) ->
+                let u = p_gain *. e +. i_gain *. i +. d_gain *. d in
+                Cons (u, fun () -> iter (e_thunk ()) (i_thunk ()) (d_thunk ()))
+            | _ -> Nil
         in
-        iter err_strm (Integrator.output err_strm) (Differentiator.output err_strm)
+        iter err_strm i_strm d_strm
 end
 
 
@@ -114,18 +119,18 @@ module ClosedLoopSystem (Plant:ISystem) (Ctrl:IController) : ISystem = struct
     open Stream
 
     let rec difference a_strm b_strm =
-        match (a_strm, b_strm) with
-        | (Nil, Nil) -> Nil
-        | (Cons (ah, athunk), Cons (bh, bthunk)) -> Cons (ah -. bh, fun () -> difference (athunk ()) (bthunk ()))
-        | _ -> assert false
+        match a_strm, b_strm with
+        | Cons(a, a_thunk), Cons(b, b_thunk) ->
+            Cons (a -. b, fun () -> difference (a_thunk ()) (b_thunk ()))
+        | _ -> Nil
 
     let output ref_strm =
-        let fwd_flow o_strm =
+        let rec fwd_flow o_strm =
             o_strm
             |> difference ref_strm
             |> Ctrl.control
-            |> Plant.output in
-
+            |> Plant.output
+        in
         let rec y = lazy (cons 0. (fun () -> Lazy.force y) |> fwd_flow) in
         Lazy.force y
 end
