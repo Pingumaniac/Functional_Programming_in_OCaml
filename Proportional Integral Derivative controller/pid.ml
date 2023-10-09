@@ -20,10 +20,6 @@ module Stream : IStream = struct
 end
 
 
-(*********************************************************
-    ARMA (Autoregressive Moving Average) system
-*)
-
 module type ISystem = sig
     val output: float stream -> float stream
 end
@@ -65,10 +61,6 @@ module ARMA (Param:ARMAParam) : ISystem = struct
       iter (0., 0., 0.) (0., 0., 0.) (make_u_stream u0)
 end
 
-
-(*********************************************************
-    PID (Proportionalâ€“Integralâ€“Derivative) controller
-*)
 
 module type IController = sig
     val control: float stream -> float stream
@@ -118,10 +110,6 @@ module PID (Param:PIDParam) : IController = struct
 end
 
 
-(*********************************************************
-    Closed loop system
-*)
-
 module ClosedLoopSystem (Plant:ISystem) (Ctrl:IController) : ISystem = struct
     open Stream
 
@@ -142,10 +130,6 @@ module ClosedLoopSystem (Plant:ISystem) (Ctrl:IController) : ISystem = struct
         Lazy.force y
 end
 
-
-(*********************************************************
-    Test modules
-*)
 
 module TestSys (Sys: ISystem) = struct
     open Stream
@@ -222,19 +206,3 @@ module Test = struct
 end
 
 let _ = Test.test ()
-
-
-(* test result
-Integrator test
- 1.000,  1.000,  1.000,  1.000,  1.000,  1.000,  1.000,  1.000,  1.000,  1.000,  1.000,
- 1.000,  2.000,  3.000,  4.000,  5.000,  6.000,  7.000,  8.000,  9.000, 10.000, 11.000,
-Differentator test
- 1.000, -1.000,  0.000,  0.000,  0.000,  0.000,  0.000,  0.000,  0.000,  0.000,  0.000,
- 1.000,  0.000,  0.000,  0.000,  0.000,  0.000,  0.000,  0.000,  0.000,  0.000,  0.000,
-Plant test
- 0.500,  0.750,  0.675,  0.608,  0.547,  0.492,  0.443,  0.399,  0.359,  0.323,  0.291,
- 0.500,  1.250,  1.925,  2.532,  3.079,  3.571,  4.014,  4.413,  4.771,  5.094,  5.385,
-Closed Loop System test
- 0.550,  0.522,  0.051, -0.102, -0.043,  0.010,  0.013,  0.001, -0.003, -0.001,  0.000,
- 0.550,  1.073,  1.124,  1.022,  0.979,  0.989,  1.002,  1.004,  1.001,  1.000,  1.000,
-*)
