@@ -1,6 +1,3 @@
-(*-------------------------------------
-  App Computer VS Computer
--------------------------------------*)
 open Globals
 
 module App = struct
